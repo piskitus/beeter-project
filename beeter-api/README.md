@@ -1,0 +1,1 @@
+This module contains the Beeter service API implemented as a RESTful Web Service with Jersey
