@@ -1,7 +1,7 @@
 package edu.upc.eetac.dsa.marc.beeter.api.model;
 
 public class BeeterError {
-	private int status;
+	private int status;// Estado del error, 4XX o 5XX
 	private String message;
  
 	public BeeterError() {

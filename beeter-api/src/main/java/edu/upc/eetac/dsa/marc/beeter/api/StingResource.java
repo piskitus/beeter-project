@@ -42,6 +42,7 @@ public class StingResource {
 	private String GET_STINGS_QUERY = "select s.*, u.name from stings s, users u where u.username=s.username and s.creation_timestamp < ifnull(?, now())  order by creation_timestamp desc limit ?";
 	private String GET_STINGS_QUERY_FROM_LAST = "select s.*, u.name from stings s, users u where u.username=s.username and s.creation_timestamp > ? order by creation_timestamp desc";
 
+	//Obtener colección de libros
 	@GET
 	@Produces(MediaType.BEETER_API_STING_COLLECTION)
 	public StingCollection getStings(@QueryParam("length") int length,
@@ -106,7 +107,102 @@ public class StingResource {
 	 
 		return stings;
 	}
+	
+	//Obtener colección de libros a partir del subject y el content
+	private String GET_STINGS_QUERY_BY_SUBJECT = "select *, users.name from stings, users where users.username=stings.username and subject like ? order by creation_timestamp desc limit ?";
+	private String GET_STINGS_QUERY_BY_CONTENT = "select s.*, u.name from stings s, users u where u.username=s.username and content like ? order by creation_timestamp desc limit ?";
+	private String GET_STINGS_QUERY_BY_SUBJECT_AND_CONTENT = "select s.*, u.name from stings s, users u where u.username=s.username and subject like ? and content like ? order by creation_timestamp desc limit ?";
+	
+	@GET
+	@Path("/search")//http://localhost:8000/beeter-api/stings/search?subject=pepito&content=palote&length=3
+	@Produces(MediaType.BEETER_API_STING_COLLECTION)//Quiero obtener colección de stings
+	//leerá los parametros que introduzcamos en la URL
+	public StingCollection getStings(@QueryParam("length") int length,
+			@QueryParam("subject") String subject,
+			@QueryParam("content") String content) {
+		StingCollection stings = new StingCollection();
+		
+		Connection conn = null;
+		try {
+			//abro conexión con el servidor
+			conn = ds.getConnection();
+		} catch (SQLException e) {
+			throw new ServerErrorException("Could not connect to the database",
+					Response.Status.SERVICE_UNAVAILABLE);
+		}
+
+		PreparedStatement stmt = null;
+		try {
+			//posibilidades en función de los parámetros que me pasen en la url
+			
+			if (subject == null && content == null) {
+				stmt = conn.prepareStatement(GET_STINGS_QUERY);//los obtengo de manera normal
+				stmt.setTimestamp(1, null);
+				length = (length <= 0) ? 5 : length;//si no hay length o menor o igual a 0 pongo 5 por defecto
+				stmt.setInt(2, length);
+			} else if (subject != null && content == null) {
+				stmt = conn.prepareStatement(GET_STINGS_QUERY_BY_SUBJECT);
+				// Coger resultados que contengan el patrón "%subject%"
+				String t = "%" + subject + "%";
+				stmt.setString(1, t);
+				length = (length <= 0) ? 5 : length;
+				stmt.setInt(2, length);
+			} else if (subject == null && content != null) {
+				stmt = conn.prepareStatement(GET_STINGS_QUERY_BY_CONTENT);
+				// Coger resultados que contengan el patrón "%content%"
+				String t = "%" + content + "%";
+				stmt.setString(1, t);
+				length = (length <= 0) ? 5 : length;
+				stmt.setInt(2, length);
+			} else if (subject != null && content != null) {
+				stmt = conn
+						.prepareStatement(GET_STINGS_QUERY_BY_SUBJECT_AND_CONTENT);
+				// Coger resultados que contengan el patrón de subject y content
+				String t = "%" + subject + "%";
+				stmt.setString(1, t);
+				String t1 = "%" + content + "%";
+				stmt.setString(2, t1);
+				length = (length <= 0) ? 5 : length;
+				stmt.setInt(3, length);
+			}
+
+			ResultSet rs = stmt.executeQuery();
+			boolean first = true;
+			long oldestTimestamp = 0;
+			while (rs.next()) {
+				Sting sting = new Sting();
+				sting.setStingid(rs.getInt("stingid"));
+				sting.setUsername(rs.getString("username"));
+				sting.setAuthor(rs.getString("name"));
+				sting.setSubject(rs.getString("subject"));
+				sting.setContent(rs.getString("content"));
+				oldestTimestamp = rs.getTimestamp("last_modified").getTime();
+				sting.setLastModified(oldestTimestamp);
+				if (first) {
+					first = false;
+					stings.setNewestTimestamp(sting.getLastModified());
+				}
+				stings.addSting(sting);
+			}
+			stings.setOldestTimestamp(oldestTimestamp);
+		} catch (SQLException e) {
+			throw new ServerErrorException(e.getMessage(),
+					Response.Status.INTERNAL_SERVER_ERROR);
+		} finally {
+			try {
+				if (stmt != null)
+					stmt.close();
+				conn.close();
+			} catch (SQLException e) {
+			}
+		}
+
+		return stings;
+	}
+	
 	////////////////////////////////////////////////////
+	
+	
 	private String GET_STING_BY_ID_QUERY = "select s.*, u.name from stings s, users u where u.username=s.username and s.stingid=?";
 	 
 	@GET
@@ -197,7 +293,7 @@ public class StingResource {
 		if (sting.getContent().length() > 500)
 			throw new BadRequestException("Content can't be greater than 500 characters.");
 	}
-	
+////////////////////////////////////////////////////////////////////	
 	private String DELETE_STING_QUERY = "delete from stings where stingid=?";
 	 
 	@DELETE
@@ -233,6 +329,7 @@ public class StingResource {
 			}
 		}
 	}
+	////////////////////////////////////////////////////////
 	private String UPDATE_STING_QUERY = "update stings set subject=ifnull(?, subject), content=ifnull(?, content) where stingid=?";
 	 
 	@PUT

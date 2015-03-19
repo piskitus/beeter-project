@@ -6,7 +6,7 @@ import javax.ws.rs.ext.ExceptionMapper;
 import javax.ws.rs.ext.Provider;
  
 import edu.upc.eetac.dsa.marc.beeter.api.model.BeeterError;
- 
+//Procesa el formato del error recibido
 @Provider
 public class WebApplicationExceptionMapper implements
 		ExceptionMapper<WebApplicationException> {
